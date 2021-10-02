@@ -16,12 +16,14 @@ const (
 )
 
 type VncSession struct {
-	Target         string
-	TargetHostname string
-	TargetPort     string
-	TargetPassword string
-	ID             string
-	Status         SessionStatus
-	Type           SessionType
-	ReplayFilePath string
+	Target             string
+	TargetHostname     string
+	TargetPort         string
+	TargetPassword     string
+	ID                 string
+	Status             SessionStatus
+	Type               SessionType
+	ReplayFilePath     string
+	RemarkableDeviceId string
+	TLS                bool
 }

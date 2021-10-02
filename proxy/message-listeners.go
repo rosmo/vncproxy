@@ -8,7 +8,8 @@ import (
 )
 
 type ClientUpdater struct {
-	conn *client.ClientConn
+	conn                   *client.ClientConn
+	suppressedMessageTypes []common.ClientMessageType
 }
 
 // Consume recieves vnc-server-bound messages (Client messages) and updates the server part of the proxy
@@ -19,6 +20,7 @@ func (cc *ClientUpdater) Consume(seg *common.RfbSegment) error {
 	case common.SegmentFullyParsedClientMessage:
 		clientMsg := seg.Message.(common.ClientMessage)
 		logger.Debugf("ClientUpdater.Consume:(vnc-server-bound) got ClientMessage type=%s", clientMsg.Type())
+
 		switch clientMsg.Type() {
 
 		case common.SetPixelFormatMsgType:
@@ -26,6 +28,18 @@ func (cc *ClientUpdater) Consume(seg *common.RfbSegment) error {
 			logger.Debugf("ClientUpdater.Consume: updating pixel format")
 			pixFmtMsg := clientMsg.(*server.MsgSetPixelFormat)
 			cc.conn.PixelFormat = pixFmtMsg.PF
+		}
+
+		suppressMessage := false
+		for _, suppressed := range cc.suppressedMessageTypes {
+			if suppressed == clientMsg.Type() {
+				suppressMessage = true
+				break
+			}
+		}
+		if suppressMessage {
+			logger.Infof("ClientUpdater.Consume:(vnc-server-bound) Suppressing client message type=%s", clientMsg.Type())
+			return nil
 		}
 
 		err := clientMsg.Write(cc.conn)

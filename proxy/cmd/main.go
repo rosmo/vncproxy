@@ -20,7 +20,8 @@ func main() {
 	var targetVncHost = flag.String("targHost", "", "target vnc server host (deprecated, use -target)")
 	var targetVncPass = flag.String("targPass", "", "target vnc password")
 	var logLevel = flag.String("logLevel", "info", "change logging level")
-
+	var reMarkable = flag.String("reMarkable", "", "reMarkable device ID (enable reMarkable 2.10+ support)")
+	var tls = flag.Bool("tls", false, "use TLS connection (turned on automatically if reMarkable)")
 	flag.Parse()
 	logger.SetLogLevel(*logLevel)
 
@@ -53,13 +54,15 @@ func main() {
 		TCPListeningURL:  tcpURL,
 		ProxyVncPassword: *vncPass, //empty = no auth
 		SingleSession: &vncproxy.VncSession{
-			Target:         *targetVnc,
-			TargetHostname: *targetVncHost,
-			TargetPort:     *targetVncPort,
-			TargetPassword: *targetVncPass, //"vncPass",
-			ID:             "dummySession",
-			Status:         vncproxy.SessionStatusInit,
-			Type:           vncproxy.SessionTypeProxyPass,
+			Target:             *targetVnc,
+			TargetHostname:     *targetVncHost,
+			TargetPort:         *targetVncPort,
+			TargetPassword:     *targetVncPass, //"vncPass",
+			ID:                 "dummySession",
+			Status:             vncproxy.SessionStatusInit,
+			Type:               vncproxy.SessionTypeProxyPass,
+			RemarkableDeviceId: *reMarkable,
+			TLS:                *reMarkable != "" || *tls,
 		}, // to be used when not using sessions
 		UsingSessions: false, //false = single session - defined in the var above
 	}
@@ -74,6 +77,9 @@ func main() {
 		proxy.SingleSession.Type = vncproxy.SessionTypeRecordingProxy
 	} else {
 		logger.Info("FBS recording is turned off")
+	}
+	if *reMarkable != "" {
+		logger.Info("reMarkable 2.10+ support turned on")
 	}
 
 	proxy.StartListening()

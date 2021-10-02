@@ -1,6 +1,9 @@
 package proxy
 
 import (
+	"bytes"
+	"crypto/tls"
+	"encoding/binary"
 	"net"
 	"path"
 	"strconv"
@@ -25,7 +28,7 @@ type VncProxy struct {
 	sessionManager   *SessionManager
 }
 
-func (vp *VncProxy) createClientConnection(target string, vncPass string) (*client.ClientConn, error) {
+func (vp *VncProxy) createClientConnection(target string, vncPass string, tlsEnabled bool, reMarkableDeviceId string) (*client.ClientConn, error) {
 	var (
 		nc  net.Conn
 		err error
@@ -35,6 +38,19 @@ func (vp *VncProxy) createClientConnection(target string, vncPass string) (*clie
 		nc, err = net.Dial("unix", target)
 	} else {
 		nc, err = net.Dial("tcp", target)
+		if tlsEnabled {
+			logger.Info("Upgrading to TLS connection...")
+			config := tls.Config{
+				InsecureSkipVerify: true,
+			}
+			tc := tls.Client(nc, &config)
+			err = tc.Handshake()
+			if err != nil {
+				return nil, err
+			}
+
+			nc = tc
+		}
 	}
 
 	if err != nil {
@@ -44,6 +60,31 @@ func (vp *VncProxy) createClientConnection(target string, vncPass string) (*clie
 
 	var noauth client.ClientAuthNone
 	authArr := []client.ClientAuth{&client.PasswordAuth{Password: vncPass}, &noauth}
+	var rmTimestamp uint64
+	if reMarkableDeviceId != "" {
+		logger.Info("Enabling reMarkable 2.10+ support")
+
+		authC, err := net.ListenPacket("udp", ":5901")
+		if err != nil {
+			return nil, err
+		}
+		defer authC.Close()
+
+		buffer := make([]byte, 128) // datagram size 51 bytes
+		n, addr, err := authC.ReadFrom(buffer)
+		logger.Debugf("Received datagram from reMarkable (%v, %v bytes)", addr, n)
+
+		pb := bytes.NewBuffer(buffer)
+		err = binary.Read(pb, binary.BigEndian, &rmTimestamp)
+		if err != nil {
+			return nil, err
+		}
+		logger.Debugf("reMarkable timestamp is %v", rmTimestamp)
+		authArr = append(authArr, &client.RemarkableAuth{
+			RemarkableTimestamp: rmTimestamp,
+			RemarkableDeviceId:  reMarkableDeviceId,
+		})
+	}
 
 	clientConn, err := client.NewClientConn(nc,
 		&client.ClientConfig{
@@ -100,7 +141,7 @@ func (vp *VncProxy) newServerConnHandler(cfg *server.ServerConfig, sconn *server
 			target = session.TargetHostname + ":" + session.TargetPort
 		}
 
-		cconn, err := vp.createClientConnection(target, session.TargetPassword)
+		cconn, err := vp.createClientConnection(target, session.TargetPassword, session.TLS, session.RemarkableDeviceId)
 		if err != nil {
 			session.Status = SessionStatusError
 			logger.Errorf("Proxy.newServerConnHandler error creating connection: %s", err)
@@ -119,7 +160,12 @@ func (vp *VncProxy) newServerConnHandler(cfg *server.ServerConfig, sconn *server
 
 		// gets the messages from the server part (from vnc-client),
 		// and write through the client to the actual vnc-server
-		clientUpdater := &ClientUpdater{cconn}
+		var clientUpdater *ClientUpdater
+		if session.RemarkableDeviceId != "" {
+			clientUpdater = &ClientUpdater{cconn, []common.ClientMessageType{ /*common.SetEncodingsMsgType,*/ common.SetPixelFormatMsgType}}
+		} else {
+			clientUpdater = &ClientUpdater{cconn, []common.ClientMessageType{}}
+		}
 		sconn.Listeners.AddListener(clientUpdater)
 
 		err = cconn.Connect()
