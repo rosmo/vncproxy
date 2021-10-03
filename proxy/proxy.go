@@ -161,10 +161,14 @@ func (vp *VncProxy) newServerConnHandler(cfg *server.ServerConfig, sconn *server
 		// gets the messages from the server part (from vnc-client),
 		// and write through the client to the actual vnc-server
 		var clientUpdater *ClientUpdater
+		clientUpdater = &ClientUpdater{conn: cconn}
 		if session.RemarkableDeviceId != "" {
-			clientUpdater = &ClientUpdater{cconn, []common.ClientMessageType{ /*common.SetEncodingsMsgType,*/ common.SetPixelFormatMsgType}}
-		} else {
-			clientUpdater = &ClientUpdater{cconn, []common.ClientMessageType{}}
+			clientUpdater.suppressedMessageTypes = []common.ClientMessageType{common.SetPixelFormatMsgType}
+		}
+		if len(session.OverrideEncodings) > 0 {
+			for _, enc := range session.OverrideEncodings {
+				clientUpdater.overrideEncodings = append(clientUpdater.overrideEncodings, common.EncodingType(enc))
+			}
 		}
 		sconn.Listeners.AddListener(clientUpdater)
 

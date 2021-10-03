@@ -10,6 +10,7 @@ import (
 type ClientUpdater struct {
 	conn                   *client.ClientConn
 	suppressedMessageTypes []common.ClientMessageType
+	overrideEncodings      []common.EncodingType
 }
 
 // Consume recieves vnc-server-bound messages (Client messages) and updates the server part of the proxy
@@ -22,7 +23,13 @@ func (cc *ClientUpdater) Consume(seg *common.RfbSegment) error {
 		logger.Debugf("ClientUpdater.Consume:(vnc-server-bound) got ClientMessage type=%s", clientMsg.Type())
 
 		switch clientMsg.Type() {
-
+		case common.SetEncodingsMsgType:
+			if len(cc.overrideEncodings) > 0 {
+				logger.Debugf("ClientUpdater.Consume:(vnc-server-bound) overriding supported encodings with %v", cc.overrideEncodings)
+				encodingsMsg := clientMsg.(*server.MsgSetEncodings)
+				encodingsMsg.EncNum = uint16(len(cc.overrideEncodings))
+				encodingsMsg.Encodings = cc.overrideEncodings
+			}
 		case common.SetPixelFormatMsgType:
 			// update pixel format
 			logger.Debugf("ClientUpdater.Consume: updating pixel format")

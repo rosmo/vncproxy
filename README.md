@@ -1,6 +1,6 @@
 # VNC proxy with reMarkable 2.10+ authentication support
 
-Forked from: 
+Forked from: [https://github.com/amitbet/vncproxy](https://github.com/amitbet/vncproxy)
 
 Usage:
   - Compile the proxy

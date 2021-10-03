@@ -26,4 +26,5 @@ type VncSession struct {
 	ReplayFilePath     string
 	RemarkableDeviceId string
 	TLS                bool
+	OverrideEncodings  []uint32
 }
